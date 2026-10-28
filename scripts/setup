@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# One-time (idempotent) setup: python venv, npm deps, TLS test certs, rust/go sanity.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+echo "== python venv"
+[ -d .venv ] || python3 -m venv .venv
+.venv/bin/pip install -q -r requirements.txt
+
+echo "== npm deps"
+npm install --no-audit --no-fund
+
+echo "== TLS test certs (shared/certs)"
+mkdir -p shared/certs
+if [ ! -f shared/certs/cert.pem ]; then
+  openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
+    -keyout shared/certs/key.pem -out shared/certs/cert.pem \
+    -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" 2>/dev/null
+fi
+
+echo "== toolchains"
+go version
+cargo --version
+node --version
+.venv/bin/pytest --version
+.venv/bin/python -m django --version
+echo "setup ok"

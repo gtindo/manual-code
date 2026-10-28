@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Usage: scripts/t <problem-id> [stack]     e.g. scripts/t A01 python
+# Runs the right test command for a problem. Stack is optional if the problem has only one.
+set -euo pipefail
+root="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$root"
+
+id="${1:?usage: scripts/t <problem-id> [stack]}"
+dirs=(problems/"$id"-*/)
+[ -d "${dirs[0]}" ] || { echo "no problem matching $id" >&2; exit 2; }
+pdir="${dirs[0]%/}"
+
+stack="${2:-}"
+if [ -z "$stack" ]; then
+  stacks=()
+  for d in "$pdir"/*/; do
+    n="$(basename "$d")"; [ "$n" = fixtures ] || stacks+=("$n")
+  done
+  [ "${#stacks[@]}" -eq 1 ] || { echo "pick a stack: ${stacks[*]}" >&2; exit 2; }
+  stack="${stacks[0]}"
+fi
+sdir="$pdir/$stack"
+[ -d "$sdir" ] || { echo "no $stack folder in $pdir" >&2; exit 2; }
+
+case "$stack" in
+  python)  exec .venv/bin/pytest "$sdir" ;;
+  node)    exec node --test "$sdir" ;;
+  go)      exec go test -count=1 "./$sdir/..." ;;
+  rust)    crate="p_$(basename "$pdir" | tr 'A-Z-' 'a-z_')"; exec cargo test -p "$crate" ;;
+  web|webcomponent|react) exec npx vitest run "$sdir/" ;;  # trailing / so "web" doesn't match "webcomponent"
+  django)  cd "$sdir" && exec "$root/.venv/bin/python" manage.py test ;;
+  *) echo "unknown stack $stack" >&2; exit 2 ;;
+esac
